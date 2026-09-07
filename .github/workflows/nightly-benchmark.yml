@@ -1,0 +1,22 @@
+name: nightly-benchmark
+
+on:
+  schedule:
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.2"
+      - run: bash ./scripts/update-benchmark.sh
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "docs: refresh benchmark snapshot"

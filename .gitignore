@@ -1,0 +1,20 @@
+# Binaries and coverage
+bin/
+dist/
+coverage.out
+coverage.html
+
+# Tool caches
+.gocache/
+.gomodcache/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+!.env.example

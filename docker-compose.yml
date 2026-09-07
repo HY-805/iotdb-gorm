@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  iotdb-1-3-1:
+    image: apache/iotdb:1.3.1-standalone
+    ports:
+      - "6667:6667"
+      - "18080:18080"
+  iotdb-2-0-10:
+    image: apache/iotdb:2.0.10-standalone
+    ports:
+      - "6668:6667"
+      - "18081:18080"
