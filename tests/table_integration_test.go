@@ -21,10 +21,10 @@ type tableIntegrationTelemetry struct {
 	Note        *string   `gorm:"column:note" iotdb:"field"`
 }
 
-// TestTableIntegrationCRUD verifies IoTDB 2.0.10 DDL, relational Tablet, NULL, and GORM query.
+// TestTableIntegrationCRUD verifies IoTDB 2.0.x DDL, relational Tablet, NULL, and GORM query.
 func TestTableIntegrationCRUD(t *testing.T) {
 	if os.Getenv("IOTDB_TABLE_INTEGRATION") != "1" {
-		t.Skip("set IOTDB_TABLE_INTEGRATION=1 to run against a real IoTDB 2.0.10 server")
+		t.Skip("set IOTDB_TABLE_INTEGRATION=1 to run against a real IoTDB 2.0.x TableModel server")
 	}
 	nodeURL := requiredIntegrationEnv(t, "IOTDB_TABLE_NODE_URL")
 	database := requiredIntegrationEnv(t, "IOTDB_TABLE_DATABASE")

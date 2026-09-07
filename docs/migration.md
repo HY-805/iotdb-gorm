@@ -25,4 +25,4 @@ Start with an isolated IoTDB adapter and keep the existing TDengine path unchang
 
 ## Validation status
 
-Local tests, race tests, vet, and Tablet conversion benchmarks are available. Real IoTDB 1.3.1 TreeModel validation passed on 2026-09-07; IoTDB 2.0.10 TableModel validation remains pending until its test environment is available.
+Local tests, race tests, vet, and Tablet conversion benchmarks are available. Real IoTDB 1.3.1 TreeModel and IoTDB 2.0.8 TableModel validation passed on 2026-09-07; IoTDB 2.0.10 TableModel validation remains pending until its test environment is available.

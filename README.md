@@ -9,9 +9,9 @@
 - Go：`1.23.2`
 - GORM：`gorm.io/gorm v1.23.4`
 - TreeModel 查询：`github.com/apache/iotdb-client-go v1.3.7`，适配 IoTDB `1.3.1`
-- Tablet 写入与 TableModel：`github.com/apache/iotdb-client-go/v2 v2.0.8`，TableModel 目标为 IoTDB `2.0.10`
+- Tablet 写入与 TableModel：`github.com/apache/iotdb-client-go/v2 v2.0.8`，已验证 IoTDB `2.0.8` TableModel；IoTDB `2.0.10` 仍需独立真机确认
 
-> 当前状态：IoTDB 1.3.1 TreeModel 真机集成测试已通过；IoTDB 2.0.10 TableModel 环境尚待提供。因此当前版本不能宣称双版本真机兼容已验收。
+> 当前状态：IoTDB 1.3.1 TreeModel 和 IoTDB 2.0.8 TableModel 真机集成测试已通过。IoTDB 2.0.10 尚未真机验证，不能将该版本写为已验收。
 
 ## 安装
 
@@ -208,7 +208,7 @@ IOTDB_TREE_SECOND_DATABASE=root.systemcenter_compatible \
 go test ./tests -run '^TestTreeIntegration' -count=1 -v
 ```
 
-IoTDB 2.0.10 TableModel 真机测试：
+IoTDB 2.0.8 TableModel 真机测试：
 
 ```bash
 IOTDB_TABLE_INTEGRATION=1 \

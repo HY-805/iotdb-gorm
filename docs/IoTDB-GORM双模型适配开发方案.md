@@ -2,13 +2,13 @@
 
 > 目标仓库：`github.com/HY-805/iotdb-gorm`
 > 编写日期：2026-09-07
-> 当前阶段：IoTDB 1.3.1 TreeModel 真机验证已通过；IoTDB 2.0.10 TableModel 环境待接入
+> 当前阶段：IoTDB 1.3.1 TreeModel、IoTDB 2.0.8 TableModel 真机验证已通过；IoTDB 2.0.10 TableModel 待独立复验
 
 ## 1. 目标与固定约束
 
 - Go 固定为 `1.23.2`，不因本组件升级平台 Go 版本。
 - GORM 基线固定为 `gorm.io/gorm v1.23.4`，不得隐式升级平台 GORM。
-- 服务端兼容矩阵：IoTDB `1.3.1` TreeModel、IoTDB `2.0.10` TableModel。
+- 服务端兼容矩阵：IoTDB `1.3.1` TreeModel、IoTDB `2.0.8` TableModel 已验证；IoTDB `2.0.10` TableModel 是待复验目标，不提前声明兼容。
 - `ModelMode` 必须支持显式配置，零值和默认值均为 `TreeModel`。
 - 官方客户端优先使用 `github.com/apache/iotdb-client-go/v2 v2.0.8`；若 1.3.1 TreeModel 真机验证出现协议兼容问题，使用同属官方项目的 `github.com/apache/iotdb-client-go v1.3.7` 处理 TreeModel 查询。
 - 官方客户端 `v2.0.10` 要求 Go 1.25，本项目不采用。
@@ -94,10 +94,10 @@ TDengine TAG 不自动转换为 IoTDB TAG。标签、属性、模板等能力通
 
 ### 6.2 TableMigrator
 
-- 使用 TableSessionPool，并生成 IoTDB 2.0.10 表模型 DDL。
+- 使用 TableSessionPool，并生成 IoTDB 2.0.x 表模型 DDL；IoTDB 2.0.8 已验证。
 - 支持数据库、普通列、TAG、ATTRIBUTE、FIELD 和时间列的模式映射。
 - 只执行幂等创建和兼容性加列；不执行破坏性迁移。
-- 所有 DDL 在真实 2.0.10 环境中校验后才进入支持矩阵。
+- 2.0.8 DDL、RelationalTablet 和查询已通过真机校验；2.0.10 只有在独立环境复验后才可写入已验证矩阵。
 
 ## 7. 批量写入优化
 
@@ -179,7 +179,8 @@ go vet ./...
 | 服务端 | 模型 | 必测内容 |
 |---|---|---|
 | IoTDB 1.3.1 | TreeModel | 连接、建模、Aligned/非 Aligned Tablet、批量写入、时间范围、最新值、类型与 NULL、删除测试数据、重连 |
-| IoTDB 2.0.10 | TableModel | 连接、建库建表、RelationalTablet、批量写入、条件查询、类型与 NULL、删除测试数据、重连 |
+| IoTDB 2.0.8 | TableModel | 已验证：连接、建库建表、RelationalTablet、批量写入、条件查询、类型与 NULL、删除测试数据 |
+| IoTDB 2.0.10 | TableModel | 待验证：连接、建库建表、RelationalTablet、批量写入、条件查询、类型与 NULL、删除测试数据、重连 |
 
 测试数据使用唯一前缀，只清理本轮创建的路径或表。未提供环境时测试必须明确 Skip，不得伪装通过。
 
@@ -201,9 +202,9 @@ go vet ./...
 2. **依赖收敛**：已固定 Go 1.23.2、GORM 1.23.4、Tree 查询客户端 v1.3.7 和 Tablet/Table 客户端 v2.0.8，并加入固定依赖检查。
 3. **连接层重构**：已统一配置；Tree/Table 分别使用官方 SessionPool/TableSessionPool，移除嵌套池和伪事务。
 4. **TreeModel**：已完成路径映射、TreeMigrator、查询扫描和 Tablet 写入；IoTDB 1.3.1 真机验证已通过。
-5. **TableModel**：已完成 TableMigrator、关系 Tablet 和查询扫描；待 IoTDB 2.0.10 环境进行真机验证。
-6. **兼容与性能**：本地单元测试、race、vet 和 Tablet 转换 benchmark 已通过；双版本真机报告尚未闭环。
-7. **发布**：待 2.0.10 真机验证完成后，再发布稳定 tag；平台只引用明确 tag，不引用 `main`。
+5. **TableModel**：已完成 TableMigrator、关系 Tablet 和查询扫描；IoTDB 2.0.8 真机验证已通过，IoTDB 2.0.10 待独立复验。
+6. **兼容与性能**：本地单元测试、race、vet 和 Tablet 转换 benchmark 已通过；1.3.1 TreeModel 与 2.0.8 TableModel 真机正确性已闭环，吞吐量 benchmark 与 2.0.10 真机报告待补。
+7. **发布**：发布稳定 tag 时只声明已验证的 1.3.1 TreeModel 与 2.0.8 TableModel；平台只引用明确 tag，不引用 `main`。
 8. **平台试接入**：先接入独立 `iotdb_compatible` 链路，不立即替换 `global.GVA_DB_TD`。
 
 ## 12. 验收标准与回滚
@@ -211,14 +212,13 @@ go vet ./...
 - Go 1.23.2 下构建、单元测试、race 和 vet 通过。
 - `go list -m` 确认 GORM 仍为 v1.23.4。
 - TreeModel 默认值、完整路径限制和非破坏性迁移生效。
-- 两个服务端的真实测试报告均通过后，才声明双版本兼容。
+- 只有 1.3.1 TreeModel 和指定 TableModel 版本的真实测试报告均通过后，才声明相应双版本兼容；2.0.10 不得因 2.0.8 通过而自动视为已验收。
 - 批量 GORM 写入实际进入官方 Tablet API，并提供与官方直接调用的基准对比。
 - 不支持的 GORM 能力返回清晰错误，不静默成功或降级。
 - 平台通过固定版本 tag 引入；回滚时只需退回旧 tag，现有 TDengine 链路不受影响。
 
 ## 13. 当前待补信息
 
-- IoTDB 2.0.10 TableModel 测试环境的 NodeURL、Database 和账号；
 - GitHub CLI 登录授权，首次推送前执行；
 - IoTDB 2.0.10 TableModel 的 DDL、RelationalTablet 与查询真机报告；
 - TreeModel 的空字符串与 NULL 在 IoTDB 1.3.1 返回中不可区分，当前适配层将零长度 Binary 读取为 NULL，业务侧不应依赖该模型中的空字符串语义。

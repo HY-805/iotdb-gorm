@@ -20,7 +20,7 @@ type ModelMode = backend.ModelMode
 const (
 	// TreeModel targets IoTDB 1.3.1 hierarchical paths and is the default.
 	TreeModel = backend.TreeModel
-	// TableModel targets IoTDB 2.0.10 relational tables.
+	// TableModel targets IoTDB 2.x relational tables; 2.0.8 is integration-verified.
 	TableModel = backend.TableModel
 )
 

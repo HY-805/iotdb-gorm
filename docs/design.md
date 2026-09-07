@@ -38,7 +38,7 @@ TreeModel 的 Tablet 写入和 schema API 使用官方 v2.0.8，结果集读取�
 
 ## TableModel
 
-TableModel 面向 IoTDB 2.0.10：
+TableModel 已在 IoTDB 2.0.8 验证；IoTDB 2.0.10 需要独立真机复验：
 
 - `Database` 是表模型 database 名称；
 - `iotdb:"tag"` 映射为 TAG；
