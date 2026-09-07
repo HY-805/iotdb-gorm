@@ -2,7 +2,7 @@
 
 > 目标仓库：`github.com/HY-805/iotdb-gorm`
 > 编写日期：2026-09-07
-> 当前阶段：核心实现已完成，正在进行兼容性收尾；IoTDB 1.3.1 真机测试被服务端 802 登录错误阻断，IoTDB 2.0.10 环境待接入
+> 当前阶段：IoTDB 1.3.1 TreeModel 真机验证已通过；IoTDB 2.0.10 TableModel 环境待接入
 
 ## 1. 目标与固定约束
 
@@ -10,9 +10,9 @@
 - GORM 基线固定为 `gorm.io/gorm v1.23.4`，不得隐式升级平台 GORM。
 - 服务端兼容矩阵：IoTDB `1.3.1` TreeModel、IoTDB `2.0.10` TableModel。
 - `ModelMode` 必须支持显式配置，零值和默认值均为 `TreeModel`。
-- 官方客户端优先使用 `github.com/apache/iotdb-client-go/v2 v2.0.8`：该版本要求 Go 1.13，并同时提供 Tree SessionPool、TableSessionPool 和 Tablet API。
+- 官方客户端优先使用 `github.com/apache/iotdb-client-go/v2 v2.0.8`；若 1.3.1 TreeModel 真机验证出现协议兼容问题，使用同属官方项目的 `github.com/apache/iotdb-client-go v1.3.7` 处理 TreeModel 查询。
 - 官方客户端 `v2.0.10` 要求 Go 1.25，本项目不采用。
-- 先用单一官方客户端真实验证两种服务端；若 `v2.0.8` 无法兼容 Server 1.3.1，再拆分为 v1 Tree 客户端和 v2 Table 客户端。
+- 已先用单一 v2 客户端验证；IoTDB 1.3.1 的全 NULL TEXT 结果块在 v2 查询中发生错位，现已拆分为 v1.3.7 Tree 查询、v2.0.8 Tablet 写入和 v2.0.8 TableModel。
 
 ## 2. 项目定位
 
@@ -29,7 +29,8 @@ gorm.Open -> Table/Where/Select/Create/Find/CreateInBatches
 ```text
 GORM
   -> 公共 Dialector / Callback / Scanner
-      -> TreeModel Backend  -> 官方 SessionPool
+      -> TreeModel 写入/Schema -> 官方 v2 SessionPool
+      -> TreeModel 查询       -> 官方 v1 SessionPool
       -> TableModel Backend -> 官方 TableSessionPool
 ```
 
@@ -120,7 +121,7 @@ TDengine TAG 不自动转换为 IoTDB TAG。标签、属性、模板等能力通
 公共要求：
 
 - `Create` 单条和切片均可使用；`CreateInBatches` 明确控制批大小。
-- 不创建第二层自定义连接池；每个 Dialector 只持有一个官方池。
+- 不创建第二层自定义连接池；TableModel 持有一个官方池，TreeModel 因 1.3.1 兼容边界持有官方 v1 查询池和 v2 写入/Schema 池。
 - 解析完整错误，附带模式、设备/表、批次行数和可安全输出的定位信息。
 - 写入重试必须说明幂等边界；服务端已成功但客户端未收到响应时可能发生重复提交。
 
@@ -149,7 +150,7 @@ GORM 初始化默认要求 `SkipDefaultTransaction: true`。驱动不能再用�
 - TreeModel 和 TableModel 分别实现引用规则，不能共用普通关系库引号逻辑。
 - 完整覆盖 BOOLEAN、INT32、INT64、FLOAT、DOUBLE、TEXT/STRING、TIMESTAMP、DATE、BLOB 和 NULL。
 - SessionDataSet 必须及时关闭并归还 Session，读取错误不能静默转换为零值。
-- 官方 `v2.0.8` 部分调用内部使用 `context.Background()`；`WithContext` 的取消能力需要在测试报告中说明真实边界，不能宣称可中断所有在途 RPC。
+- 官方 v1/v2 部分调用内部使用 `context.Background()`；`WithContext` 的取消能力需要在测试报告中说明真实边界，不能宣称可中断所有在途 RPC。
 
 ## 10. 测试与性能验证
 
@@ -197,12 +198,12 @@ go vet ./...
 ## 11. 开发阶段
 
 1. **上游导入**：已完成固定提交导入、模块路径调整、许可证和来源说明保留。
-2. **依赖收敛**：已固定 Go 1.23.2、GORM 1.23.4、官方客户端 v2.0.8，并加入固定依赖检查。
+2. **依赖收敛**：已固定 Go 1.23.2、GORM 1.23.4、Tree 查询客户端 v1.3.7 和 Tablet/Table 客户端 v2.0.8，并加入固定依赖检查。
 3. **连接层重构**：已统一配置；Tree/Table 分别使用官方 SessionPool/TableSessionPool，移除嵌套池和伪事务。
-4. **TreeModel**：已完成路径映射、TreeMigrator、查询扫描和 Tablet 写入；真机验证被服务端 802 登录错误阻断。
+4. **TreeModel**：已完成路径映射、TreeMigrator、查询扫描和 Tablet 写入；IoTDB 1.3.1 真机验证已通过。
 5. **TableModel**：已完成 TableMigrator、关系 Tablet 和查询扫描；待 IoTDB 2.0.10 环境进行真机验证。
 6. **兼容与性能**：本地单元测试、race、vet 和 Tablet 转换 benchmark 已通过；双版本真机报告尚未闭环。
-7. **发布**：待 1.3.1 登录问题和 2.0.10 真机验证完成后，再发布稳定 tag；平台只引用明确 tag，不引用 `main`。
+7. **发布**：待 2.0.10 真机验证完成后，再发布稳定 tag；平台只引用明确 tag，不引用 `main`。
 8. **平台试接入**：先接入独立 `iotdb_compatible` 链路，不立即替换 `global.GVA_DB_TD`。
 
 ## 12. 验收标准与回滚
@@ -215,9 +216,9 @@ go vet ./...
 - 不支持的 GORM 能力返回清晰错误，不静默成功或降级。
 - 平台通过固定版本 tag 引入；回滚时只需退回旧 tag，现有 TDengine 链路不受影响。
 
-## 13. 当前阻断与待补信息
+## 13. 当前待补信息
 
 - IoTDB 2.0.10 TableModel 测试环境的 NodeURL、Database 和账号；
 - GitHub CLI 登录授权，首次推送前执行；
-- IoTDB 1.3.1 端点当前返回 `error code: 802, Log in failed`；同源使用官方 v1.3.7 Tree 客户端也返回 802，需先核对账号、密码、服务端会话和 host 网络配置；
-- 认证问题排除后，重新执行 TreeModel 真机测试，再决定是否继续统一使用官方客户端 v2.0.8，或启动双客户端兜底方案。
+- IoTDB 2.0.10 TableModel 的 DDL、RelationalTablet 与查询真机报告；
+- TreeModel 的空字符串与 NULL 在 IoTDB 1.3.1 返回中不可区分，当前适配层将零长度 Binary 读取为 NULL，业务侧不应依赖该模型中的空字符串语义。

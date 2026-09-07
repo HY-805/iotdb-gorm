@@ -6,11 +6,12 @@ The repository has local conversion benchmarks and no committed network benchmar
 
 | Date | Go | OS | IoTDB target | Benchmark | Status |
 | --- | --- | --- | --- | --- | --- |
-| 2026-09-07 | 1.23.2 | CI runner | 1.3.1 TreeModel / 2.0.10 TableModel | Tablet conversion, 1/100/1000/5000 rows | available locally; server result pending |
+| 2026-09-07 | 1.23.2 | macOS arm64 | 1.3.1 TreeModel | CRUD integration; Tablet conversion, 1/100/1000/5000 rows | CRUD passed; throughput pending |
+| 2026-09-07 | 1.23.2 | CI runner | 2.0.10 TableModel | Tablet conversion, 1/100/1000/5000 rows | server result pending |
 
 ## Workflow
 
 - `scripts/update-benchmark.sh` is the CI entrypoint.
 - The nightly workflow is defined in `.github/workflows/nightly-benchmark.yml`.
 - `BenchmarkCreateBatchTablet` compares GORM batch conversion with direct official Tablet construction.
-- Network throughput and query latency must be collected only after a reachable IoTDB 1.3.1 or 2.0.10 environment is supplied; local benchmark success is not server acceptance.
+- IoTDB 1.3.1 correctness passed, but network throughput and query latency remain unmeasured. IoTDB 2.0.10 still needs a reachable TableModel environment; local benchmark success is not server acceptance.

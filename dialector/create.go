@@ -250,10 +250,12 @@ func (d *Dialector) rowTarget(statement *gorm.Statement, row reflect.Value, devi
 			return "", fmt.Errorf("read device field %s: %w", deviceField.Name, err)
 		}
 		path, ok := value.(string)
-		if !ok || strings.TrimSpace(path) == "" {
-			return "", fmt.Errorf("device field %s must be a non-empty string", deviceField.Name)
+		if !ok {
+			return "", fmt.Errorf("device field %s must be a string", deviceField.Name)
 		}
-		target = path
+		if path = strings.TrimSpace(path); path != "" {
+			target = path
+		}
 	}
 	return d.resolveTable(target)
 }

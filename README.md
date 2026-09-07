@@ -2,17 +2,16 @@
 
 [![CI](https://github.com/HY-805/iotdb-gorm/actions/workflows/ci.yml/badge.svg)](https://github.com/HY-805/iotdb-gorm/actions/workflows/ci.yml)
 
-`iotdb-gorm` 是 Apache 官方 [`iotdb-client-go`](https://github.com/apache/iotdb-client-go) 之上的薄 GORM 适配层。它不复制 RPC 协议，也不创建第二套 IoTDB 连接池；GORM 的批量 `Create` 会直接转换成官方 Tablet API。
+`iotdb-gorm` 是 Apache 官方 [`iotdb-client-go`](https://github.com/apache/iotdb-client-go) 之上的薄 GORM 适配层。它不复制 RPC 协议；GORM 的批量 `Create` 会直接转换成官方 Tablet API。
 
 固定依赖与目标矩阵：
 
 - Go：`1.23.2`
 - GORM：`gorm.io/gorm v1.23.4`
-- 官方客户端：`github.com/apache/iotdb-client-go/v2 v2.0.8`
-- IoTDB 1.3.1：TreeModel，默认模式
-- IoTDB 2.0.10：TableModel，必须显式配置
+- TreeModel 查询：`github.com/apache/iotdb-client-go v1.3.7`，适配 IoTDB `1.3.1`
+- Tablet 写入与 TableModel：`github.com/apache/iotdb-client-go/v2 v2.0.8`，TableModel 目标为 IoTDB `2.0.10`
 
-> 当前状态：本地单元测试、race、vet 和 Tablet 转换基准已通过。IoTDB 1.3.1 测试端点已连通，但测试账号返回服务端 802，尚未完成真实 CRUD 验收；IoTDB 2.0.10 环境尚待提供。因此当前版本不能宣称双版本真机兼容已验收。
+> 当前状态：IoTDB 1.3.1 TreeModel 真机集成测试已通过；IoTDB 2.0.10 TableModel 环境尚待提供。因此当前版本不能宣称双版本真机兼容已验收。
 
 ## 安装
 
@@ -173,7 +172,7 @@ iotdb://root:root@127.0.0.1:6667/root.datacenter_compatible?model=tree&aligned=t
 
 ## 生命周期和 Context
 
-每个 Dialector 只有一个官方 `SessionPool` 或 `TableSessionPool`。应用退出时必须调用：
+TableModel 每个 Dialector 使用一个官方 `TableSessionPool`。为兼容 IoTDB 1.3.1，TreeModel 使用官方 v2 SessionPool 完成 Tablet 写入和 schema API，并使用官方 v1 SessionPool 读取结果；两者均由同一 Dialector 生命周期统一关闭。应用退出时必须调用：
 
 ```go
 if err := gormiotdb.Close(db); err != nil {
@@ -181,7 +180,13 @@ if err := gormiotdb.Close(db); err != nil {
 }
 ```
 
-官方 v2.0.8 的部分 API 内部仍使用 `context.Background()`。`WithContext` 可以阻止尚未开始的操作并约束查询超时，但不能承诺中断所有已经发出的 RPC。
+官方 v1/v2 的部分 API 内部仍使用 `context.Background()`。`WithContext` 可以阻止尚未开始的操作并约束查询超时，但不能承诺中断所有已经发出的 RPC。
+
+### IoTDB 1.3.1 TreeModel 查询边界
+
+- 时间戳是服务端隐式返回列，`Select(...)` 中不要显式写 `time`；使用 `Where("time >= ?", ...)` 和 `Order("time asc")` 限定时间即可。
+- `count(*)` 返回各 measurement 的聚合结果，不等价于关系表行数，不能直接用 GORM `Count` 表示设备记录数。
+- 服务端会把全 NULL 的 TEXT 结果返回为空 Binary；适配层将零长度 Binary 读取为 `nil`，因此 TreeModel 下空字符串和 NULL 不可区分。
 
 ## 测试
 

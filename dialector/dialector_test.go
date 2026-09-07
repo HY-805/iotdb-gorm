@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"database/sql/driver"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -212,6 +213,27 @@ func TestCreateHonorsBatchSize(t *testing.T) {
 	}
 	if len(runtime.tablets) != 2 {
 		t.Fatalf("expected two tablets, got %d", len(runtime.tablets))
+	}
+}
+
+// TestEmptyDevicePathFallsBackToTable verifies optional per-row routing keeps the logical table target.
+func TestEmptyDevicePathFallsBackToTable(t *testing.T) {
+	var cache sync.Map
+	schemaValue, err := schema.Parse(&treeTelemetry{}, &cache, schema.NamingStrategy{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := &Dialector{resolved: resolvedConfig{Config: Config{ModelMode: TreeModel, Database: "root.datacenter_compatible"}}}
+	target, err := d.rowTarget(&gorm.Statement{
+		Context: context.Background(),
+		Schema:  schemaValue,
+		Table:   "device001",
+	}, reflect.ValueOf(treeTelemetry{}), schemaValue.LookUpField("DevicePath"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != "root.datacenter_compatible.device001" {
+		t.Fatalf("expected logical table fallback, got %s", target)
 	}
 }
 

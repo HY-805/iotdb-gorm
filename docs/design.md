@@ -8,7 +8,7 @@
 GORM
   -> Dialector / callbacks / schema mapping
       -> database/sql bridge
-          -> one official SessionPool or TableSessionPool
+          -> official TreeModel/TableModel pools
               -> IoTDB
 ```
 
@@ -16,7 +16,7 @@ GORM
 
 ## 生命周期
 
-`Dialector.Initialize` 创建一次官方池，再通过 `sql.OpenDB` 创建轻量 bridge。database/sql 的逻辑连接不会再创建 IoTDB SessionPool。应用退出时调用 `gormiotdb.Close(db)`，该函数先关闭 bridge，再等待在途官方结果集释放，最后关闭官方池。
+`Dialector.Initialize` 创建模型所需的官方池，再通过 `sql.OpenDB` 创建轻量 bridge。database/sql 的逻辑连接不会再创建 IoTDB SessionPool。应用退出时调用 `gormiotdb.Close(db)`，该函数先关闭 bridge，再等待在途官方结果集释放，最后关闭官方池。
 
 一个 Dialector 不应被多个独立 GORM 实例重复初始化；平台项目通过 Wire 创建一次 `*gorm.DB` 并复用。
 
@@ -31,6 +31,8 @@ TreeModel 是默认模式，面向 IoTDB 1.3.1：
 - `Aligned` 默认 true；
 - `iotdb:"device"` 字段或 `DevicePathFunc` 可显式提供每行设备路径；
 - `iotdb:"tag"` 和 `iotdb:"attribute"` 不会被隐式转换，TreeModel 下直接报错。
+
+TreeModel 的 Tablet 写入和 schema API 使用官方 v2.0.8，结果集读取使用与 IoTDB 1.3.1 匹配的官方 v1.3.7。时间戳是查询结果的隐式列，`Select` 不应显式包含 `time`；`count(*)` 也不是设备记录行数。服务端会把全 NULL TEXT 返回为空 Binary，适配层按 `nil` 返回，因而空字符串与 NULL 不可区分。
 
 建模调用使用官方 `CreateAlignedTimeseries`、`CreateMultiTimeseries` 等接口。Migrator 只创建缺失测点和校验类型，不执行 Drop、Rename 或类型修改。
 
@@ -64,7 +66,7 @@ Create callback 的核心步骤如下：
 
 ## 参数和查询
 
-官方客户端 v2.0.8 的 SQL 执行入口不提供本适配层所需的通用 database/sql 参数绑定，因此 bridge 使用状态机把值编码为 SQL 字面量：
+官方客户端的 SQL 执行入口不提供本适配层所需的通用 database/sql 参数绑定，因此 bridge 使用状态机把值编码为 SQL 字面量：
 
 - 只替换引号、反引号和注释之外的 `?`；
 - 字符串使用 SQL 单引号转义；
@@ -80,4 +82,4 @@ IoTDB Tree/Table 两种模型都不是完整关系数据库。适配层明确拒
 
 ## Context 限制
 
-适配层在 Session 获取、执行前后和结果读取时检查 Context，并向查询 API 传递超时。官方 v2.0.8 中部分底层方法仍使用 `context.Background()`，所以不能把 `WithContext` 描述为可中断所有已经发出的 RPC。
+适配层在 Session 获取、执行前后和结果读取时检查 Context，并向查询 API 传递超时。官方 v1/v2 中部分底层方法仍使用 `context.Background()`，所以不能把 `WithContext` 描述为可中断所有已经发出的 RPC。

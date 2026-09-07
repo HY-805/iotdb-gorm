@@ -4,19 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	treeclient "github.com/apache/iotdb-client-go/client"
 	"github.com/apache/iotdb-client-go/v2/client"
 )
 
-// Official implements Backend with one official SessionPool or TableSessionPool.
+// Official implements Backend with official v2 write/Table pools and a v1 TreeModel query pool.
 type Official struct {
-	config    Config
-	treePool  *client.SessionPool
-	tablePool *client.TableSessionPool
+	config        Config
+	treePool      *client.SessionPool
+	treeQueryPool *treeclient.SessionPool
+	tablePool     *client.TableSessionPool
 
 	lifecycleMu sync.Mutex
 	inFlight    sync.WaitGroup
@@ -24,7 +27,7 @@ type Official struct {
 	closeOnce   sync.Once
 }
 
-// NewOfficial creates a lazy official-client backend without opening a second pool.
+// NewOfficial creates the official pools required by the configured model compatibility boundary.
 func NewOfficial(config Config) (*Official, error) {
 	if len(config.NodeURLs) == 0 {
 		return nil, errors.New("iotdb: at least one NodeURL is required")
@@ -48,6 +51,15 @@ func NewOfficial(config Config) (*Official, error) {
 	if config.Mode == TreeModel {
 		pool := client.NewSessionPool(poolConfig, config.PoolSize, connectionTimeout, acquireTimeout, config.EnableRPCCompression)
 		official.treePool = &pool
+		queryPool := treeclient.NewSessionPool(&treeclient.PoolConfig{
+			NodeUrls:        append([]string(nil), config.NodeURLs...),
+			UserName:        config.Username,
+			Password:        config.Password,
+			FetchSize:       config.FetchSize,
+			TimeZone:        config.TimeZone,
+			ConnectRetryMax: config.ConnectRetryMax,
+		}, config.PoolSize, connectionTimeout, acquireTimeout, config.EnableRPCCompression)
+		official.treeQueryPool = &queryPool
 		return official, nil
 	}
 
@@ -119,19 +131,19 @@ func (o *Official) Query(ctx context.Context, statement string) (ResultSet, erro
 
 	timeout := o.queryTimeout(ctx)
 	if o.config.Mode == TreeModel {
-		session, err := o.treePool.GetSession()
+		session, err := o.treeQueryPool.GetSession()
 		if err != nil {
 			o.end()
 			return nil, fmt.Errorf("acquire TreeModel session: %w", err)
 		}
 		dataSet, err := session.ExecuteQueryStatement(statement, &timeout)
 		if err != nil {
-			o.treePool.PutBack(session)
+			o.treeQueryPool.PutBack(session)
 			o.end()
 			return nil, fmt.Errorf("query TreeModel: %w", err)
 		}
-		return newOfficialResultSet(dataSet, func() {
-			o.treePool.PutBack(session)
+		return newTreeV1ResultSet(dataSet, func() {
+			o.treeQueryPool.PutBack(session)
 			o.end()
 		}), nil
 	}
@@ -234,7 +246,7 @@ func (o *Official) EnsureTreeSchema(ctx context.Context, device string, measurem
 	}
 }
 
-// Close waits for checked-out result sets and then closes the one official pool.
+// Close waits for checked-out result sets and then closes all owned official pools.
 func (o *Official) Close() error {
 	o.closeOnce.Do(func() {
 		o.lifecycleMu.Lock()
@@ -243,6 +255,9 @@ func (o *Official) Close() error {
 		o.inFlight.Wait()
 		if o.treePool != nil {
 			o.treePool.Close()
+		}
+		if o.treeQueryPool != nil {
+			o.treeQueryPool.Close()
 		}
 		if o.tablePool != nil {
 			o.tablePool.Close()
@@ -596,5 +611,91 @@ func (r *officialResultSet) Close() error {
 	return r.closeErr
 }
 
+// treeV1ResultSet reads IoTDB 1.3.1 TreeModel blocks through the matching official client.
+type treeV1ResultSet struct {
+	dataSet  *treeclient.SessionDataSet
+	release  func()
+	closeErr error
+	once     sync.Once
+}
+
+// newTreeV1ResultSet creates a result set that releases its TreeModel session exactly once.
+func newTreeV1ResultSet(dataSet *treeclient.SessionDataSet, release func()) *treeV1ResultSet {
+	return &treeV1ResultSet{dataSet: dataSet, release: release}
+}
+
+// ColumnNames returns server-reported TreeModel labels.
+func (r *treeV1ResultSet) ColumnNames() []string {
+	return append([]string(nil), r.dataSet.GetColumnNames()...)
+}
+
+// ColumnTypes returns server-reported TreeModel types.
+func (r *treeV1ResultSet) ColumnTypes() []string {
+	return append([]string(nil), r.dataSet.GetColumnTypes()...)
+}
+
+// Next advances to the next TreeModel row.
+func (r *treeV1ResultSet) Next() (bool, error) {
+	next, err := r.dataSet.Next()
+	if isTreeResultEOF(err) {
+		return false, nil
+	}
+	return next, err
+}
+
+// Value converts official v1 values to database/sql-compatible values.
+func (r *treeV1ResultSet) Value(index int) (any, error) {
+	serverIndex := int32(index + 1)
+	isNull, err := r.dataSet.IsNullByIndex(serverIndex)
+	if err != nil {
+		return nil, err
+	}
+	if isNull {
+		return nil, nil
+	}
+	value, err := r.dataSet.GetObjectByIndex(serverIndex)
+	if err != nil {
+		return nil, err
+	}
+	binary, ok := value.(*treeclient.Binary)
+	if !ok {
+		return value, nil
+	}
+	dataType := treeColumnType(r.dataSet.GetColumnTypes(), index)
+	if dataType == "BLOB" {
+		return binary.GetValues(), nil
+	}
+	if len(binary.GetValues()) == 0 {
+		return nil, nil
+	}
+	return binary.GetStringValue(), nil
+}
+
+// Close closes the official v1 result and returns its session exactly once.
+func (r *treeV1ResultSet) Close() error {
+	r.once.Do(func() {
+		r.closeErr = r.dataSet.Close()
+		if isTreeResultEOF(r.closeErr) {
+			r.closeErr = nil
+		}
+		r.release()
+	})
+	return r.closeErr
+}
+
+// isTreeResultEOF handles both Go and Thrift EOF values returned after result completion.
+func isTreeResultEOF(err error) bool {
+	return errors.Is(err, io.EOF) || (err != nil && strings.EqualFold(strings.TrimSpace(err.Error()), "EOF"))
+}
+
+// treeColumnType returns a normalized column type when metadata contains the requested index.
+func treeColumnType(columnTypes []string, index int) string {
+	if index < 0 || index >= len(columnTypes) {
+		return ""
+	}
+	return strings.ToUpper(columnTypes[index])
+}
+
 var _ Backend = (*Official)(nil)
 var _ ResultSet = (*officialResultSet)(nil)
+var _ ResultSet = (*treeV1ResultSet)(nil)

@@ -24,7 +24,7 @@
 
 - module path 改为 `github.com/HY-805/iotdb-gorm`；
 - Go 固定 `1.23.2`，GORM 固定 `v1.23.4`；
-- 官方客户端固定 `iotdb-client-go/v2 v2.0.8`；
+- IoTDB 1.3.1 TreeModel 查询固定 `iotdb-client-go v1.3.7`，Tablet 写入和 TableModel 固定 `iotdb-client-go/v2 v2.0.8`；
 - 增加默认 TreeModel 与显式 TableModel；
 - 移除“每个 database/sql 连接内部再创建 SessionPool”的嵌套池；
 - 移除伪事务、伪 Commit、Rollback 关闭连接等行为；
@@ -39,4 +39,4 @@
 
 本项目定位是官方客户端的 GORM 适配层，不复制 Apache RPC、Tablet 序列化、SessionPool 或重连实现。
 
-当前先使用单一官方 v2.0.8 客户端验证两种服务端。2026-09-07 对 IoTDB 1.3.1 测试端点的首次连接能够建立 TCP，但账号在查询阶段返回 802；使用官方 v1.3.7 Tree 客户端做同源诊断也返回相同 802。因此尚无证据证明问题由 v2.0.8 兼容性导致，暂不引入第二套客户端。认证问题排除后再根据真实协议结果决定是否拆分。
+2026-09-07 使用更新后的账号完成 IoTDB 1.3.1 真机测试。v2.0.8 查询客户端在全 NULL TEXT 列上发生结果块错位，而官方 v1.3.7 能稳定解码 1.3.1 TreeModel；因此按既定策略拆分为 v1 Tree 查询、v2 Tablet 写入和 v2 TableModel。两套均为 Apache 官方客户端，不引入自定义 RPC 实现。

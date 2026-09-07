@@ -76,12 +76,12 @@ func TestTreeIntegrationNonAlignedTablet(t *testing.T) {
 	if err := target.Create(&rows).Error; err != nil {
 		t.Fatalf("insert non-aligned Tablet: %v", err)
 	}
-	var count int64
-	if err := target.Where("time >= ?", base).Count(&count).Error; err != nil {
-		t.Fatalf("count non-aligned rows: %v", err)
+	var found []treeIntegrationTelemetry
+	if err := target.Select("temperature, online, counter").Where("time >= ?", base).Order("time asc").Find(&found).Error; err != nil {
+		t.Fatalf("query non-aligned rows: %v", err)
 	}
-	if count != 2 {
-		t.Fatalf("expected 2 rows, got %d", count)
+	if len(found) != 2 || found[0].Counter != 10 || found[1].Counter != 11 {
+		t.Fatalf("unexpected non-aligned rows: %+v", found)
 	}
 }
 
@@ -112,7 +112,7 @@ func TestTreeIntegrationMultiDeviceBatch(t *testing.T) {
 	}
 	for _, device := range []string{deviceA, deviceB} {
 		var found []treeIntegrationTelemetry
-		if err := db.Table(device).Where("time >= ?", base).Find(&found).Error; err != nil {
+		if err := db.Table(device).Select("temperature, online, counter").Where("time >= ?", base).Order("time asc").Find(&found).Error; err != nil {
 			t.Fatalf("query device %s: %v", device, err)
 		}
 		if len(found) == 0 {

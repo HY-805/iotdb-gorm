@@ -1,3 +1,5 @@
+github.com/apache/iotdb-client-go v1.3.7 h1:NHEW0yysGfxFQkkJpFHTlww1a/RHCINbOXBfv2/aIQ0=
+github.com/apache/iotdb-client-go v1.3.7/go.mod h1:3D6QYkqRmASS/4HsjU+U/3fscyc5M9xKRfywZsKuoZY=
 github.com/apache/iotdb-client-go/v2 v2.0.8 h1:4Z2bmnoeH9gPNz0cDSfqbvwfyY0Ocbo18vtPfjKo34k=
 github.com/apache/iotdb-client-go/v2 v2.0.8/go.mod h1:keIG+1Xfw8n2NukUbrEcYnnyN9VxP8OJLYvnHsg1k2s=
 github.com/apache/thrift v0.15.0 h1:aGvdaR0v1t9XLgjtBYwxcBvBOTMqClzwE26CHOgjW1Y=
