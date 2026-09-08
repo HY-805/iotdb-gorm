@@ -21,7 +21,7 @@ go get github.com/HY-805/iotdb-gorm@<固定版本标签>
 
 平台项目应引用发布标签，不应长期引用 `main`。
 
-完整的连接、建模、迁移、批量写入和查询示例见 [使用说明](docs/使用说明.md)。
+完整的连接、建模、迁移、批量写入、查询和 Raw SQL 示例见 [使用指南](docs/README.md)。
 
 ## TreeModel 快速开始
 
@@ -227,6 +227,6 @@ go test ./tests -run '^TestTableIntegration' -count=1 -v
 - `driver/iotdbsql/`：共享官方池上的轻量 `database/sql` bridge
 - `internal/backend/`：官方 Tree/Table SessionPool 生命周期
 - `tests/`：显式开关控制的真实版本矩阵测试
-- `docs/`：设计、迁移、兼容和性能记录
+- `docs/README.md`：完整使用指南和兼容边界
 
 上游来源和本仓库差异见 [UPSTREAM.md](./UPSTREAM.md)。
