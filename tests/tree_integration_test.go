@@ -58,6 +58,33 @@ func TestTreeIntegrationAlignedCRUD(t *testing.T) {
 	}
 }
 
+// TestTreeIntegrationRepeatedAutoMigrate verifies existing device metadata can be read on IoTDB 1.3.1.
+func TestTreeIntegrationRepeatedAutoMigrate(t *testing.T) {
+	db, database := openTreeIntegrationDB(t, true, "IOTDB_TREE_DATABASE")
+	device := integrationDevice("repeated_migrate")
+	defer cleanupTreeDevice(t, db, database+"."+device)
+
+	target := db.Table(device)
+	if err := target.AutoMigrate(&treeIntegrationTelemetry{}); err != nil {
+		t.Fatalf("first AutoMigrate: %v", err)
+	}
+	if err := target.AutoMigrate(&treeIntegrationTelemetry{}); err != nil {
+		t.Fatalf("second AutoMigrate for existing device: %v", err)
+	}
+}
+
+// TestTreeIntegrationRawRowsWithoutTable verifies metadata SQL does not need a placeholder GORM table.
+func TestTreeIntegrationRawRowsWithoutTable(t *testing.T) {
+	db, _ := openTreeIntegrationDB(t, true, "IOTDB_TREE_DATABASE")
+	rows, err := db.Raw("SHOW STORAGE GROUP").Rows()
+	if err != nil {
+		t.Fatalf("Raw SHOW STORAGE GROUP: %v", err)
+	}
+	if err := rows.Close(); err != nil {
+		t.Fatalf("close Raw rows: %v", err)
+	}
+}
+
 // TestTreeIntegrationNonAlignedTablet verifies the explicit non-aligned write path.
 func TestTreeIntegrationNonAlignedTablet(t *testing.T) {
 	db, database := openTreeIntegrationDB(t, false, "IOTDB_TREE_DATABASE")

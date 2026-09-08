@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -442,13 +443,26 @@ func readDeviceMetadata(dataSet *client.SessionDataSet, target *TreeDeviceSchema
 		}
 		target.Exists = true
 		if name := findColumn(dataSet.GetColumnNames(), "IsAligned"); name != "" {
-			value, valueErr := dataSet.GetBoolean(name)
+			rawValue, valueErr := dataSet.GetString(name)
 			if valueErr != nil {
 				return fmt.Errorf("read IsAligned: %w", valueErr)
+			}
+			value, valueErr := parseMetadataBoolean(name, rawValue)
+			if valueErr != nil {
+				return valueErr
 			}
 			target.Aligned = value
 		}
 	}
+}
+
+// parseMetadataBoolean normalizes metadata returned as BOOLEAN or TEXT by different IoTDB versions.
+func parseMetadataBoolean(column, rawValue string) (bool, error) {
+	value, err := strconv.ParseBool(strings.TrimSpace(rawValue))
+	if err != nil {
+		return false, fmt.Errorf("parse metadata column %s value %q as boolean: %w", column, rawValue, err)
+	}
+	return value, nil
 }
 
 // readTimeseriesMetadata decodes SHOW TIMESERIES paths and data types.

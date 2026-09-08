@@ -50,6 +50,17 @@ func (noopConnPool) QueryContext(context.Context, string, ...interface{}) (*sql.
 // QueryRowContext implements the dry-run GORM connection contract.
 func (noopConnPool) QueryRowContext(context.Context, string, ...interface{}) *sql.Row { return nil }
 
+type recordingConnPool struct {
+	noopConnPool
+	query string
+}
+
+// QueryContext records the statement so Raw callback behavior can be asserted without a live server.
+func (c *recordingConnPool) QueryContext(_ context.Context, query string, _ ...interface{}) (*sql.Rows, error) {
+	c.query = query
+	return nil, nil
+}
+
 type mockBackend struct {
 	mode         backend.ModelMode
 	tablets      []*client.Tablet
@@ -268,6 +279,35 @@ func TestDryRunResolvesTreePath(t *testing.T) {
 	})
 	if !strings.Contains(query, "FROM root.datacenter_compatible.device001") || !strings.Contains(query, "LIMIT 2") {
 		t.Fatalf("unexpected TreeModel query: %s", query)
+	}
+}
+
+// TestRawRowsSkipsTreePathResolution verifies complete Raw SQL does not require a placeholder Table call.
+func TestRawRowsSkipsTreePathResolution(t *testing.T) {
+	conn := &recordingConnPool{}
+	db, err := gorm.Open(New(Config{Conn: conn, Database: "root.datacenter_compatible"}), &gorm.Config{
+		SkipDefaultTransaction: true,
+		DisableAutomaticPing:   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := db.Raw("SHOW STORAGE GROUP").Rows()
+	if err != nil {
+		t.Fatalf("execute Raw rows without Table: %v", err)
+	}
+	if rows != nil {
+		_ = rows.Close()
+	}
+	if conn.query != "SHOW STORAGE GROUP" {
+		t.Fatalf("expected Raw query to reach connection unchanged, got %q", conn.query)
+	}
+
+	var found []treeTelemetry
+	err = db.Table("root.other.device001").Find(&found).Error
+	if err == nil || !strings.Contains(err.Error(), "outside configured database") {
+		t.Fatalf("expected ordinary GORM query path validation to remain active, got %v", err)
 	}
 }
 

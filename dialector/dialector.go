@@ -211,6 +211,10 @@ func (d *Dialector) resolveStatementTable(db *gorm.DB) {
 	if db.Error != nil {
 		return
 	}
+	// Raw already contains a complete statement and therefore has no logical table to resolve.
+	if db.Statement.SQL.Len() > 0 {
+		return
+	}
 	table := db.Statement.Table
 	if table == "" && db.Statement.Schema != nil {
 		table = db.Statement.Schema.Table
