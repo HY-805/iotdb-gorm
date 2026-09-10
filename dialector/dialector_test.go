@@ -355,6 +355,7 @@ func TestDryRunAllowsTreeQueryWildcards(t *testing.T) {
 
 // TestTreeWildcardQueryPreservesFullPathColumns verifies expanded series remain distinct map keys.
 func TestTreeWildcardQueryPreservesFullPathColumns(t *testing.T) {
+	timestamp := time.UnixMilli(10)
 	runtime := &mockBackend{
 		mode: backend.TreeModel,
 		queryResult: &mockResultSet{
@@ -364,7 +365,7 @@ func TestTreeWildcardQueryPreservesFullPathColumns(t *testing.T) {
 				"root.datacenter_compatible.device_b.product_data.pressure",
 			},
 			types: []string{"INT64", "FLOAT", "FLOAT"},
-			rows:  [][]any{{int64(10), float32(1.25), float32(2.5)}},
+			rows:  [][]any{{timestamp, float32(1.25), float32(2.5)}},
 			index: -1,
 		},
 	}
@@ -384,6 +385,9 @@ func TestTreeWildcardQueryPreservesFullPathColumns(t *testing.T) {
 	}
 	if len(found) != 1 {
 		t.Fatalf("expected one result row, got %d", len(found))
+	}
+	if got, ok := found[0]["time"].(time.Time); !ok || !got.Equal(timestamp) {
+		t.Fatalf("time column mismatch: got=%T(%v) want=%v", found[0]["time"], found[0]["time"], timestamp)
 	}
 	for _, column := range []string{
 		"root.datacenter_compatible.device_a.product_data.pressure",

@@ -2,6 +2,7 @@
 
 ## [Unreleased]
 
+- fixed TreeModel wildcard queries scanning the IoTDB 1.3.1 `Time` column into `map[string]any`
 - fixed the module path to `github.com/HY-805/iotdb-gorm` and the Go 1.23.2 compatibility baseline
 - added default TreeModel support for IoTDB 1.3.1 and explicit TableModel support for IoTDB 2.0.10
 - routed GORM batch creates through the official Tablet and RelationalTablet APIs

@@ -2,7 +2,9 @@ package iotdbsql
 
 import (
 	"context"
+	"reflect"
 	"testing"
+	"time"
 )
 
 type resultSetStub struct {
@@ -53,6 +55,22 @@ func TestRowsPreserveWildcardFullPathColumns(t *testing.T) {
 		"root.datacenter.device_b.product_data.pressure",
 	}
 	assertColumnsEqual(t, got, want)
+}
+
+// TestRowsTimeColumnScanType verifies the TreeModel Time column keeps its runtime time.Time type
+// even when IoTDB 1.3.1 reports INT64 metadata for that column.
+func TestRowsTimeColumnScanType(t *testing.T) {
+	result := &resultSetStub{
+		columns: []string{"Time", "root.datacenter.device_a.product_data.counter"},
+		types:   []string{"INT64", "INT64"},
+	}
+	rows := newRows(context.Background(), result)
+	if got, want := rows.ColumnTypeScanType(0), reflect.TypeOf(time.Time{}); got != want {
+		t.Fatalf("time scan type mismatch: got=%v want=%v", got, want)
+	}
+	if got, want := rows.ColumnTypeScanType(1), reflect.TypeOf(int64(0)); got != want {
+		t.Fatalf("ordinary INT64 scan type mismatch: got=%v want=%v", got, want)
+	}
 }
 
 // assertColumnsEqual compares ordered database/sql column labels.
