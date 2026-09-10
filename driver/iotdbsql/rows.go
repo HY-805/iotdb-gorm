@@ -12,6 +12,16 @@ import (
 	"github.com/HY-805/iotdb-gorm/internal/backend"
 )
 
+type fullPathColumnsContextKey struct{}
+
+// WithFullPathColumns marks a wildcard query so result columns retain complete server paths.
+func WithFullPathColumns(ctx context.Context) context.Context {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithValue(ctx, fullPathColumnsContextKey{}, true)
+}
+
 // rows adapts the official result set and owns its checked-out session.
 type rows struct {
 	ctx         context.Context
@@ -24,8 +34,12 @@ type rows struct {
 func newRows(ctx context.Context, result backend.ResultSet) *rows {
 	serverColumns := result.ColumnNames()
 	columns := make([]string, len(serverColumns))
+	preserveFullPaths := false
+	if ctx != nil {
+		preserveFullPaths, _ = ctx.Value(fullPathColumnsContextKey{}).(bool)
+	}
 	for i, column := range serverColumns {
-		columns[i] = normalizeColumnName(column)
+		columns[i] = normalizeColumnName(column, preserveFullPaths)
 	}
 	return &rows{
 		ctx:         ctx,
@@ -35,7 +49,7 @@ func newRows(ctx context.Context, result backend.ResultSet) *rows {
 	}
 }
 
-// Columns returns normalized column labels for struct-field matching.
+// Columns returns short labels for fixed-device scans or complete labels for wildcard scans.
 func (r *rows) Columns() []string {
 	return append([]string(nil), r.columns...)
 }
@@ -102,11 +116,14 @@ func (r *rows) ColumnTypeScanType(index int) reflect.Type {
 	}
 }
 
-// normalizeColumnName strips a TreeModel device prefix for one-device GORM scans.
-func normalizeColumnName(column string) string {
+// normalizeColumnName strips a TreeModel prefix for fixed-device scans and preserves it for wildcard scans.
+func normalizeColumnName(column string, preserveFullPath bool) string {
 	trimmed := strings.Trim(column, "`\"")
 	if strings.EqualFold(trimmed, "Time") {
 		return "time"
+	}
+	if preserveFullPath {
+		return trimmed
 	}
 	if dot := strings.LastIndexByte(trimmed, '.'); dot >= 0 && dot+1 < len(trimmed) {
 		return trimmed[dot+1:]

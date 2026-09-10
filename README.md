@@ -83,6 +83,19 @@ db.Table("device001")
 
 传入完整路径时，该路径必须位于配置根路径下。动态路径节点只接受安全标识符，不支持表别名或 SQL 表达式。
 
+TreeModel只读查询支持完整节点通配符`*`和`**`。通配符匹配多个设备时，服务端返回的完整测点路径会保留为独立列；由于列名是动态的，应使用`map[string]any`接收：
+
+```go
+var rows []map[string]any
+err := db.Table("root.datacenter_compatible.**.product_data").
+    Select("pressure").
+    Where("time >= ? AND time < ?", startMillis, endMillis).
+    Order("time asc").
+    Find(&rows).Error
+```
+
+结果中的测点列名类似`root.datacenter_compatible.device001.product_data.pressure`。通配符只允许作为完整路径节点，`device**`等写法会被拒绝；`Create`、`CreateInBatches`和`AutoMigrate`仍只接受具体设备路径。
+
 ### 多设备批量写入
 
 模型可以使用一个显式设备字段。该字段只负责路由，不会写成 measurement：
