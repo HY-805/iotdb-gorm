@@ -34,6 +34,19 @@ replace github.com/HY-805/iotdb-gorm => ../iotdb-gorm
 
 TreeModel 是默认模式。`Database` 必须是受控根路径，例如 `root.datacenter_compatible`；`db.Table("device001")` 会映射为 `root.datacenter_compatible.device001`。
 
+TreeModel的`Table(...).Find(...)`只读查询支持完整节点通配符`*`和`**`：
+
+```go
+var rows []map[string]any
+err := db.Table("root.datacenter_compatible.**.product_data").
+    Select("pressure").
+    Where("time >= ? AND time < ?", startMillis, endMillis).
+    Order("time asc").
+    Find(&rows).Error
+```
+
+通配符匹配多个设备后，结果使用服务端返回的完整测点路径作为独立列名，因此应使用`map[string]any`接收动态列。只有完整节点`*`和`**`会被接受，`device**`等组合仍会被拒绝；建点、批量写入和迁移不允许通配符。
+
 ### 连接和模型
 
 ```go

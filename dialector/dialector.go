@@ -149,7 +149,7 @@ func (d *Dialector) QuoteTo(writer clause.Writer, identifier string) {
 		if i > 0 {
 			_ = writer.WriteByte('.')
 		}
-		if treePathNodePattern.MatchString(part) || tableNamePattern.MatchString(part) {
+		if part == "*" || part == "**" || treePathNodePattern.MatchString(part) || tableNamePattern.MatchString(part) {
 			_, _ = writer.WriteString(part)
 			continue
 		}
@@ -219,10 +219,13 @@ func (d *Dialector) resolveStatementTable(db *gorm.DB) {
 	if table == "" && db.Statement.Schema != nil {
 		table = db.Statement.Schema.Table
 	}
-	resolved, err := d.resolveTable(table)
+	resolved, wildcard, err := d.resolveQueryTable(table)
 	if err != nil {
 		_ = db.AddError(err)
 		return
+	}
+	if wildcard {
+		db.Statement.Context = iotdbsql.WithFullPathColumns(db.Statement.Context)
 	}
 	db.Statement.Table = resolved
 	if db.Statement.TableExpr != nil {
@@ -232,6 +235,38 @@ func (d *Dialector) resolveStatementTable(db *gorm.DB) {
 		}
 		db.Statement.TableExpr = &clause.Expr{SQL: resolved}
 	}
+}
+
+// resolveQueryTable allows complete-node wildcards only for TreeModel read paths.
+func (d *Dialector) resolveQueryTable(table string) (string, bool, error) {
+	if d.resolved.ModelMode == TableModel {
+		resolved, err := d.resolveTable(table)
+		return resolved, false, err
+	}
+
+	table = strings.Trim(strings.TrimSpace(table), "`\"")
+	if table == "" {
+		return "", false, errors.New("iotdb: empty table or device name")
+	}
+	if strings.ContainsAny(table, " \t\r\n,()") {
+		return "", false, fmt.Errorf("iotdb: table aliases and expressions are not supported: %q", table)
+	}
+
+	path := table
+	if !strings.HasPrefix(path, "root.") {
+		if strings.Contains(path, ".") {
+			return "", false, fmt.Errorf("iotdb: relative TreeModel query path must be one path node: %q", table)
+		}
+		path = d.resolved.Database + "." + path
+	}
+	wildcard, err := validateTreeQueryPath(path)
+	if err != nil {
+		return "", false, err
+	}
+	if !strings.HasPrefix(path, d.resolved.Database+".") {
+		return "", false, fmt.Errorf("iotdb: query path %q is outside configured database %q", path, d.resolved.Database)
+	}
+	return path, wildcard, nil
 }
 
 // resolveTable maps a simple TreeModel table to its configured device root.
@@ -278,6 +313,25 @@ func validateTreePath(path string) error {
 		}
 	}
 	return nil
+}
+
+// validateTreeQueryPath accepts only full-node TreeModel wildcards and reports whether one is present.
+func validateTreeQueryPath(path string) (bool, error) {
+	parts := strings.Split(path, ".")
+	if len(parts) < 3 || parts[0] != "root" {
+		return false, fmt.Errorf("iotdb: query path must be a complete root.database.device path")
+	}
+	wildcard := false
+	for _, part := range parts {
+		if part == "*" || part == "**" {
+			wildcard = true
+			continue
+		}
+		if !treePathNodePattern.MatchString(part) {
+			return false, fmt.Errorf("iotdb: invalid TreeModel query path node %q", part)
+		}
+	}
+	return wildcard, nil
 }
 
 // rejectPreload reports unsupported association preloading only when requested.

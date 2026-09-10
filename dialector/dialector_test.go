@@ -64,6 +64,8 @@ func (c *recordingConnPool) QueryContext(_ context.Context, query string, _ ...i
 type mockBackend struct {
 	mode         backend.ModelMode
 	tablets      []*client.Tablet
+	query        string
+	queryResult  backend.ResultSet
 	aligned      bool
 	ensureDevice string
 	ensureSchema []backend.Measurement
@@ -80,8 +82,12 @@ func (m *mockBackend) Ping(context.Context) error { return nil }
 // Exec records no statements because these tests focus on Tablet paths.
 func (m *mockBackend) Exec(context.Context, string) error { return nil }
 
-// Query is intentionally unsupported by the write-path mock.
-func (m *mockBackend) Query(context.Context, string) (backend.ResultSet, error) {
+// Query returns an optional result for query-path tests.
+func (m *mockBackend) Query(_ context.Context, query string) (backend.ResultSet, error) {
+	m.query = query
+	if m.queryResult != nil {
+		return m.queryResult, nil
+	}
 	return nil, errors.New("unexpected query")
 }
 
@@ -110,6 +116,39 @@ func (m *mockBackend) Close() error {
 	m.closed = true
 	return nil
 }
+
+type mockResultSet struct {
+	columns []string
+	types   []string
+	rows    [][]any
+	index   int
+}
+
+// ColumnNames returns server-shaped test labels.
+func (r *mockResultSet) ColumnNames() []string { return r.columns }
+
+// ColumnTypes returns server-shaped test types.
+func (r *mockResultSet) ColumnTypes() []string { return r.types }
+
+// Next advances the in-memory result cursor.
+func (r *mockResultSet) Next() (bool, error) {
+	if r.index+1 >= len(r.rows) {
+		return false, nil
+	}
+	r.index++
+	return true, nil
+}
+
+// Value returns one value from the current in-memory row.
+func (r *mockResultSet) Value(index int) (any, error) {
+	if r.index < 0 || r.index >= len(r.rows) || index < 0 || index >= len(r.rows[r.index]) {
+		return nil, errors.New("mock result index out of range")
+	}
+	return r.rows[r.index][index], nil
+}
+
+// Close releases the no-op in-memory result.
+func (*mockResultSet) Close() error { return nil }
 
 // TestResolveConfigDefaults verifies TreeModel and aligned defaults.
 func TestResolveConfigDefaults(t *testing.T) {
@@ -279,6 +318,123 @@ func TestDryRunResolvesTreePath(t *testing.T) {
 	})
 	if !strings.Contains(query, "FROM root.datacenter_compatible.device001") || !strings.Contains(query, "LIMIT 2") {
 		t.Fatalf("unexpected TreeModel query: %s", query)
+	}
+}
+
+// TestDryRunAllowsTreeQueryWildcards verifies wildcard paths remain unquoted in read SQL.
+func TestDryRunAllowsTreeQueryWildcards(t *testing.T) {
+	db, err := gorm.Open(New(Config{Conn: noopConnPool{}, Database: "root.datacenter_compatible"}), &gorm.Config{
+		SkipDefaultTransaction: true,
+		DryRun:                 true,
+		DisableAutomaticPing:   true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found []treeTelemetry
+	result := db.Table("root.datacenter_compatible.**.product_data").
+		Select("temp").
+		Where("time >= ? AND time < ?", int64(10), int64(20)).
+		Order("temp asc").
+		Limit(10).
+		Find(&found)
+	if result.Error != nil {
+		t.Fatalf("wildcard query should build successfully: %v", result.Error)
+	}
+	query := result.Statement.SQL.String()
+	if !strings.Contains(query, "FROM root.datacenter_compatible.**.product_data") {
+		t.Fatalf("wildcard path was not preserved: %s", query)
+	}
+	if strings.Contains(query, "`**`") {
+		t.Fatalf("wildcard path must not be quoted: %s", query)
+	}
+	if !strings.Contains(query, "ORDER BY temp asc LIMIT ?") {
+		t.Fatalf("wildcard query lost ordinary GORM clauses: %s", query)
+	}
+}
+
+// TestTreeWildcardQueryPreservesFullPathColumns verifies expanded series remain distinct map keys.
+func TestTreeWildcardQueryPreservesFullPathColumns(t *testing.T) {
+	runtime := &mockBackend{
+		mode: backend.TreeModel,
+		queryResult: &mockResultSet{
+			columns: []string{
+				"Time",
+				"root.datacenter_compatible.device_a.product_data.pressure",
+				"root.datacenter_compatible.device_b.product_data.pressure",
+			},
+			types: []string{"INT64", "FLOAT", "FLOAT"},
+			rows:  [][]any{{int64(10), float32(1.25), float32(2.5)}},
+			index: -1,
+		},
+	}
+	d := &Dialector{config: Config{
+		NodeURLs: []string{"127.0.0.1:6667"},
+		Database: "root.datacenter_compatible",
+	}, backend: runtime}
+	db, err := gorm.Open(d, &gorm.Config{SkipDefaultTransaction: true, DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = d.Close() })
+
+	var found []map[string]any
+	if err := db.Table("root.datacenter_compatible.**.product_data").Select("pressure").Find(&found).Error; err != nil {
+		t.Fatalf("execute wildcard query: %v", err)
+	}
+	if len(found) != 1 {
+		t.Fatalf("expected one result row, got %d", len(found))
+	}
+	for _, column := range []string{
+		"root.datacenter_compatible.device_a.product_data.pressure",
+		"root.datacenter_compatible.device_b.product_data.pressure",
+	} {
+		if _, exists := found[0][column]; !exists {
+			t.Fatalf("full path column %q is missing from result: %v", column, found[0])
+		}
+	}
+	if !strings.Contains(runtime.query, "FROM root.datacenter_compatible.**.product_data") {
+		t.Fatalf("unexpected backend query: %s", runtime.query)
+	}
+}
+
+// TestTreeQueryWildcardValidation verifies only full wildcard nodes inside the configured root are accepted.
+func TestTreeQueryWildcardValidation(t *testing.T) {
+	d := &Dialector{resolved: resolvedConfig{Config: Config{Database: "root.datacenter_compatible"}}}
+	for _, path := range []string{
+		"root.datacenter_compatible.*.product_data",
+		"root.datacenter_compatible.**.product_data",
+	} {
+		resolved, wildcard, err := d.resolveQueryTable(path)
+		if err != nil {
+			t.Fatalf("resolve %q: %v", path, err)
+		}
+		if resolved != path || !wildcard {
+			t.Fatalf("unexpected wildcard resolution for %q: resolved=%q wildcard=%t", path, resolved, wildcard)
+		}
+	}
+
+	for _, path := range []string{
+		"root.datacenter_compatible.device**.product_data",
+		"root.datacenter_compatible.**.product data",
+		"root.other.**.product_data",
+	} {
+		if _, _, err := d.resolveQueryTable(path); err == nil {
+			t.Fatalf("expected wildcard query path %q to be rejected", path)
+		}
+	}
+
+	tableModel := &Dialector{resolved: resolvedConfig{Config: Config{ModelMode: TableModel, Database: "iotdb_test"}}}
+	if _, _, err := tableModel.resolveQueryTable("iotdb_test.**"); err == nil {
+		t.Fatal("TableModel query must reject TreeModel wildcards")
+	}
+}
+
+// TestTreeWritePathsRemainConcrete verifies read wildcard support does not broaden write targets.
+func TestTreeWritePathsRemainConcrete(t *testing.T) {
+	d := &Dialector{resolved: resolvedConfig{Config: Config{Database: "root.datacenter_compatible"}}}
+	if _, err := d.resolveTable("root.datacenter_compatible.**.product_data"); err == nil {
+		t.Fatal("wildcard write path must remain rejected")
 	}
 }
 
