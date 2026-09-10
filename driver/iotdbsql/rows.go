@@ -96,6 +96,11 @@ func (r *rows) ColumnTypeDatabaseTypeName(index int) string {
 
 // ColumnTypeScanType returns a useful database/sql scan type for each IoTDB type.
 func (r *rows) ColumnTypeScanType(index int) reflect.Type {
+	// IoTDB 1.3.1 reports the TreeModel Time column as INT64 metadata while
+	// the official client returns its runtime value as time.Time.
+	if index >= 0 && index < len(r.columns) && strings.EqualFold(r.columns[index], "time") {
+		return reflect.TypeOf(time.Time{})
+	}
 	switch r.ColumnTypeDatabaseTypeName(index) {
 	case "BOOLEAN":
 		return reflect.TypeOf(false)
