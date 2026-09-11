@@ -153,6 +153,12 @@ func (m Migrator) GetTables() ([]string, error) {
 	}
 }
 
+// TableType reports that IoTDB table/device metadata cannot be represented by
+// GORM's relational TableType contract.
+func (m Migrator) TableType(interface{}) (gorm.TableType, error) {
+	return nil, fmt.Errorf("%w: TableType", ErrUnsupportedOperation)
+}
+
 // AddColumn adds only the requested missing Tree measurement or table column.
 func (m Migrator) AddColumn(dst interface{}, fieldName string) error {
 	statement, table, err := m.parse(dst)
@@ -204,6 +210,15 @@ func (m Migrator) MigrateColumn(dst interface{}, field *schema.Field, columnType
 		}
 	}
 	return fmt.Errorf("iotdb: column %s type conflict: server=%s requested=%s", field.DBName, existing, requested)
+}
+
+// MigrateColumnUnique keeps GORM 1.26.1 AutoMigrate compatible while leaving
+// relational uniqueness unsupported for both IoTDB models.
+func (m Migrator) MigrateColumnUnique(_ interface{}, _ *schema.Field, columnType gorm.ColumnType) error {
+	if _, ok := columnType.Unique(); !ok {
+		return nil
+	}
+	return fmt.Errorf("%w: unique constraints", ErrUnsupportedOperation)
 }
 
 // HasColumn reports whether a measurement or table column exists.
@@ -300,6 +315,11 @@ func (m Migrator) HasIndex(interface{}, string) bool {
 // RenameIndex rejects relational index renames.
 func (m Migrator) RenameIndex(interface{}, string, string) error {
 	return fmt.Errorf("%w: RenameIndex", ErrUnsupportedOperation)
+}
+
+// GetIndexes reports that IoTDB does not expose relational index metadata.
+func (m Migrator) GetIndexes(interface{}) ([]gorm.Index, error) {
+	return nil, fmt.Errorf("%w: GetIndexes", ErrUnsupportedOperation)
 }
 
 // migrateTree delegates idempotent device schema reconciliation to the backend.

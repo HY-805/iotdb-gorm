@@ -7,7 +7,7 @@
 固定依赖与目标矩阵：
 
 - Go：`1.23.2`
-- GORM：`gorm.io/gorm v1.23.4`
+- GORM：`gorm.io/gorm v1.26.1`
 - TreeModel 查询：`github.com/apache/iotdb-client-go v1.3.7`，适配 IoTDB `1.3.1`
 - Tablet 写入与 TableModel：`github.com/apache/iotdb-client-go/v2 v2.0.8`；IoTDB `2.0.8` TableModel 只完成基础建表、写入和查询链路验证，尚未充分覆盖 2.0.x TableModel
 

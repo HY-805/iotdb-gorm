@@ -369,9 +369,9 @@ func buildLimit(c clause.Clause, builder clause.Builder) {
 		c.Build(builder)
 		return
 	}
-	if limit.Limit > 0 {
+	if limit.Limit != nil && *limit.Limit > 0 {
 		_, _ = builder.WriteString("LIMIT ")
-		builder.AddVar(builder, limit.Limit)
+		builder.AddVar(builder, *limit.Limit)
 	}
 	if limit.Offset > 0 {
 		_, _ = builder.WriteString(" OFFSET ")
