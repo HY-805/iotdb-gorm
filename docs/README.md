@@ -10,7 +10,7 @@
 | 2.0.8 | TableModel | `iotdb-client-go/v2 v2.0.8` | 已实机验证 |
 | 2.0.10 | TableModel | 尚未确定 | 待独立实机验证 |
 
-项目基线为 Go `1.23.2` 和 GORM `v1.23.4`。应用只需要直接引入 `iotdb-gorm` 和业务代码使用的 GORM 包，不需要直接导入 Apache 官方客户端；Go Modules 会自动解析适配层所需的官方客户端版本。
+项目基线为 Go `1.23.2` 和 GORM `v1.26.1`。应用只需要直接引入 `iotdb-gorm` 和业务代码使用的 GORM 包，不需要直接导入 Apache 官方客户端；Go Modules 会自动解析适配层所需的官方客户端版本。
 
 ## 安装
 
