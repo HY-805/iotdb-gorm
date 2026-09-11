@@ -23,7 +23,7 @@
 本仓库针对平台约束重写了核心执行路径：
 
 - module path 改为 `github.com/HY-805/iotdb-gorm`；
-- Go 固定 `1.23.2`，GORM 固定 `v1.23.4`；
+- Go 固定 `1.23.2`，GORM 固定 `v1.26.1`；
 - IoTDB 1.3.1 TreeModel 查询固定 `iotdb-client-go v1.3.7`，Tablet 写入和 TableModel 固定 `iotdb-client-go/v2 v2.0.8`；
 - 增加默认 TreeModel 与显式 TableModel；
 - 移除“每个 database/sql 连接内部再创建 SessionPool”的嵌套池；

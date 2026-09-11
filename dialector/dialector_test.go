@@ -479,6 +479,21 @@ func TestDefaultTransactionsAreRejected(t *testing.T) {
 	}
 }
 
+// TestGorm126MigratorMetadataBoundaries verifies the new GORM 1.26.1
+// migrator methods preserve IoTDB's unsupported relational metadata boundary.
+func TestGorm126MigratorMetadataBoundaries(t *testing.T) {
+	migrator := Migrator{}
+	if _, err := migrator.TableType(nil); !errors.Is(err, ErrUnsupportedOperation) {
+		t.Fatalf("expected TableType to remain unsupported, got %v", err)
+	}
+	if _, err := migrator.GetIndexes(nil); !errors.Is(err, ErrUnsupportedOperation) {
+		t.Fatalf("expected GetIndexes to remain unsupported, got %v", err)
+	}
+	if err := migrator.MigrateColumnUnique(nil, nil, columnType{}); err != nil {
+		t.Fatalf("unsupported uniqueness metadata should be ignored, got %v", err)
+	}
+}
+
 // TestTreeRejectsTableTags verifies TDengine-style tags are never silently remapped.
 func TestTreeRejectsTableTags(t *testing.T) {
 	runtime := &mockBackend{mode: backend.TreeModel}

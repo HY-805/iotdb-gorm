@@ -2,7 +2,7 @@
 set -euo pipefail
 
 expected_go="1.23.2"
-expected_gorm="v1.23.4"
+expected_gorm="v1.26.1"
 expected_iotdb_tree="v1.3.7"
 expected_iotdb_v2="v2.0.8"
 
