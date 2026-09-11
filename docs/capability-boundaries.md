@@ -29,7 +29,7 @@
 | 组件 | 本文基线 | 说明 |
 |---|---|---|
 | Go | 1.23.2 | 仓库声明的 Go 版本 |
-| GORM | 1.23.4 | 驱动适配的 GORM 版本 |
+| GORM | 1.26.1 | 驱动适配的 GORM 版本 |
 | iotdb-gorm | v0.1.2 | 本文描述的驱动版本 |
 | TreeModel 查询客户端 | `iotdb-client-go v1.3.7` | 用于 IoTDB 1.3.1 TreeModel 查询 |
 | TreeModel Schema 和写入客户端 | `iotdb-client-go/v2 v2.0.8` | 用于 Schema RPC 和 Tablet 写入 |
