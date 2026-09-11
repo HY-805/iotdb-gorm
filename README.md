@@ -9,9 +9,9 @@
 - Go：`1.23.2`
 - GORM：`gorm.io/gorm v1.23.4`
 - TreeModel 查询：`github.com/apache/iotdb-client-go v1.3.7`，适配 IoTDB `1.3.1`
-- Tablet 写入与 TableModel：`github.com/apache/iotdb-client-go/v2 v2.0.8`，已验证 IoTDB `2.0.8` TableModel；IoTDB `2.0.10` 仍需独立真机确认
+- Tablet 写入与 TableModel：`github.com/apache/iotdb-client-go/v2 v2.0.8`；IoTDB `2.0.8` TableModel 只完成基础建表、写入和查询链路验证，尚未充分覆盖 2.0.x TableModel
 
-> 当前状态：IoTDB 1.3.1 TreeModel 和 IoTDB 2.0.8 TableModel 真机集成测试已通过。IoTDB 2.0.10 尚未真机验证，不能将该版本写为已验收。
+> 支持定位：主要支持 IoTDB 1.3.1 TreeModel。IoTDB 2.0.8 TableModel 仅完成有限的真机集成验证，其他 2.0.x 版本及复杂查询、完整迁移、并发和高可用能力均需独立验证。
 
 ## 安装
 
@@ -21,7 +21,7 @@ go get github.com/HY-805/iotdb-gorm@<固定版本标签>
 
 平台项目应引用发布标签，不应长期引用 `main`。
 
-完整的连接、建模、迁移、批量写入、查询和 Raw SQL 示例见 [使用指南](docs/README.md)。
+完整的连接、建模、迁移、批量写入、查询和 Raw SQL 示例见 [使用指南](docs/README.md)。开发前请同时阅读独立的 [能力边界文档](docs/capability-boundaries.md)，确认目标 API 属于“支持并已验证”“需要原生 SQL”“不支持”还是“尚未验证”。
 
 ## TreeModel 快速开始
 
@@ -116,7 +116,7 @@ type Telemetry struct {
 - 默认每个 Tablet 最多 1000 行、估算序列化数据最多 4 MiB
 - 重复设备时间戳会直接报错，不静默覆盖
 
-## TableModel 示例
+## TableModel 示例（有限验证）
 
 ```go
 type TableTelemetry struct {
@@ -136,7 +136,7 @@ db, err := gorm.Open(gormiotdb.New(gormiotdb.Config{
 }), &gorm.Config{SkipDefaultTransaction: true})
 ```
 
-TableModel 使用官方 `NewRelationalTablet` 和 `TableSessionPool.Insert`。TAG、ATTRIBUTE、FIELD 必须显式标记；这些角色不会在 TreeModel 中被偷偷转换为 measurement。
+TableModel 使用官方 `NewRelationalTablet` 和 `TableSessionPool.Insert`。TAG、ATTRIBUTE、FIELD 必须显式标记；这些角色不会在 TreeModel 中被偷偷转换为 measurement。当前只在 IoTDB 2.0.8 上验证了连接、`AutoMigrate`、`CreateInBatches`、NULL FIELD 以及 `Where/Order/Find` 基础链路，不代表已经全面支持 IoTDB 2.0.x TableModel。
 
 ## 配置
 
@@ -146,10 +146,11 @@ TableModel 使用官方 `NewRelationalTablet` 和 `TableSessionPool.Insert`。TA
 | `NodeURLs` | 无 | 官方客户端节点列表，至少一个 `host:port` |
 | `Database` | 无 | TreeModel 根路径或 TableModel database |
 | `Aligned` | `true` | TreeModel 对齐写入，使用 `*bool` 区分未配置和 false |
-| `PoolSize` | `8` | 唯一官方 SessionPool 的最大 Session 数 |
+| `PoolSize` | `8` | 单个官方 SessionPool 最多可借出的 Session 数；TreeModel 的查询池和写入/Schema 池分别应用该上限 |
 | `ConnectTimeout` | `10s` | 建连超时 |
 | `AcquireTimeout` | `10s` | 获取 Session 超时 |
 | `QueryTimeout` | `30s` | 服务端查询超时 |
+| `ConnectRetryMax` | `3` | 官方客户端连接断开后的重连轮次，不是业务 SQL/RPC 重试次数 |
 | `BatchSize` | `1000` | 单 Tablet 最大行数 |
 | `MaxBatchBytes` | `4 MiB` | 单 Tablet 估算数据上限 |
 | `TableInsertConcurrency` | `4` | TableModel 多 Tablet 最大并发数 |
@@ -165,14 +166,16 @@ iotdb://root:root@127.0.0.1:6667/root.datacenter_compatible?model=tree&aligned=t
 
 生产配置建议使用结构化 `Config`，避免密码进入日志或进程参数。
 
-## 首期 GORM 能力边界
+## GORM 能力边界摘要
 
-已实现或纳入集成测试：
+以下仅为快速摘要。配置与连接池语义、可执行示例、SQL 回退方式、删除安全边界和未验证 API 以 [能力边界文档](docs/capability-boundaries.md) 为准。
+
+推荐使用的核心 API：
 
 - `Table`、`Select`、`Where`、`Order`、`Limit`
 - `Find`、`Scan`、`Raw`、`Exec`、`WithContext`
 - `Create`、`CreateInBatches`
-- TreeModel 与 TableModel 的非破坏性 `AutoMigrate`
+- TreeModel 的非破坏性 `AutoMigrate`；TableModel `AutoMigrate` 只完成 IoTDB 2.0.8 基础链路验证
 
 显式不支持：
 
@@ -223,7 +226,7 @@ IOTDB_TREE_SECOND_DATABASE=root.systemcenter_compatible \
 go test ./tests -run '^TestTreeIntegration' -count=1 -v
 ```
 
-IoTDB 2.0.8 TableModel 真机测试：
+IoTDB 2.0.8 TableModel 基础链路真机测试：
 
 ```bash
 IOTDB_TABLE_INTEGRATION=1 \
@@ -241,5 +244,6 @@ go test ./tests -run '^TestTableIntegration' -count=1 -v
 - `internal/backend/`：官方 Tree/Table SessionPool 生命周期
 - `tests/`：显式开关控制的真实版本矩阵测试
 - `docs/README.md`：完整使用指南和兼容边界
+- `docs/capability-boundaries.md`：按 API 列出的支持状态、示例和验证边界
 
 上游来源和本仓库差异见 [UPSTREAM.md](./UPSTREAM.md)。
