@@ -2,7 +2,7 @@
 
 本文面向第一次接触 `github.com/HY-805/iotdb-gorm` 的 Go 开发者，用于回答三个问题：驱动能够完成哪些 IoTDB 操作、应该使用哪个 GORM API、哪些关系型数据库习惯不能直接套用。
 
-文档以 `iotdb-gorm v0.1.2` 为基线，主要支持目标是 IoTDB 1.3.1 TreeModel。驱动包含 IoTDB 2.0.x TableModel 适配代码，但只在 IoTDB 2.0.8 上完成了基础链路验证，尚不足以声明全面支持 2.0.x TableModel。未明确列出的 IoTDB 或 GORM 能力不应视为已经支持。
+文档以 `iotdb-gorm v0.1.3` 为基线，主要支持目标是 IoTDB 1.3.1 TreeModel。驱动包含 IoTDB 2.0.x TableModel 适配代码，但只在 IoTDB 2.0.8 上完成了基础链路验证，尚不足以声明全面支持 2.0.x TableModel。未明确列出的 IoTDB 或 GORM 能力不应视为已经支持。
 
 版本定位如下：
 
@@ -30,7 +30,7 @@
 |---|---|---|
 | Go | 1.23.2 | 仓库声明的 Go 版本 |
 | GORM | 1.26.1 | 驱动适配的 GORM 版本 |
-| iotdb-gorm | v0.1.2 | 本文描述的驱动版本 |
+| iotdb-gorm | v0.1.3 | 本文描述的驱动版本 |
 | TreeModel 查询客户端 | `iotdb-client-go v1.3.7` | 用于 IoTDB 1.3.1 TreeModel 查询 |
 | TreeModel Schema 和写入客户端 | `iotdb-client-go/v2 v2.0.8` | 用于 Schema RPC 和 Tablet 写入 |
 | TreeModel 服务端 | IoTDB 1.3.1 | 本文 TreeModel 验证边界 |
@@ -72,7 +72,7 @@ root.example.device_001.metrics_a.pressure
 
 TableModel 面向 IoTDB 2.x 的关系表模型。模型字段需要明确标记为 `time`、`tag`、`attribute` 或 `field`。TreeModel measurement 的 Tag 和 Attribute 是时序元数据，与 TableModel 的列角色不是同一概念，二者不能混用。
 
-`iotdb-gorm v0.1.2` 只在 IoTDB 2.0.8 上验证了以下 TableModel 基础链路：
+`iotdb-gorm v0.1.3` 只在 IoTDB 2.0.8 上验证了以下 TableModel 基础链路：
 
 - 建立连接并执行 `gormiotdb.Ping`；
 - 使用 `AutoMigrate` 创建包含 TAG、ATTRIBUTE 和 FIELD 的表；
